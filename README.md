@@ -4,8 +4,8 @@ Unlike traditional dashboards that only show metrics, this system integrates an 
 
 It transforms raw customer data into:
 
-Interactive Power BI visual intelligence
-Machine Learning–based churn prediction
-LLM‑generated executive‑level explanations
+Interactive Power BI visual intelligence___
+Machine Learning–based churn prediction___
+LLM‑generated executive‑level explanations___
 
 This project demonstrates how modern AI systems can bridge the gap between data science and business decision‑making.
