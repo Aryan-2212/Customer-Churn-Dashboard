@@ -1,0 +1,12 @@
+{
+    "dataset_size": 10127,
+    "churn_rate": 16.07,
+    "best_model": "Random Forest",
+    "top_churn_drivers": [
+        "Total_Trans_Amt",
+        "Total_Trans_Ct",
+        "Total_Ct_Chng_Q4_Q1",
+        "Total_Revolving_Bal",
+        "Avg_Utilization_Ratio"
+    ]
+}
