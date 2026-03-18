@@ -1,8 +1,23 @@
 import streamlit as st
+import pandas as pd
 
 st.set_page_config(page_title="Customer Churn Dashboard", layout="wide")
 
 st.title("AI-Powered Customer Churn Dashboard")
+
+@st.cache_data
+def load_data():
+    df=pd.read_csv("BankChurners_Cleaned.csv")
+    return df
+data = load_data()
+
+st.write("Dataset loaded successfully")
+
+st.write("Total Customers:", len(df))
+
+st.subheader("Dataset Preview")
+
+st.dataframe(df.head())
 
 st.write("""
 This dashboard provides insights into customer churn behavior.
