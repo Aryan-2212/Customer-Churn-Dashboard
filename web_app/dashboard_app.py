@@ -663,6 +663,21 @@ def render_charts(figures: list[go.Figure]) -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
 
 
+def build_dashboard_snapshot(filtered_df: pd.DataFrame) -> dict:
+    return {
+        "income_category_counts": filtered_df["Income_Category"].value_counts().to_dict(),
+        "gender_counts": filtered_df["Gender"].value_counts().to_dict(),
+        "card_category_counts": filtered_df["Card_Category"].value_counts().to_dict(),
+        "education_level_counts": filtered_df["Education_Level"].value_counts().to_dict(),
+        "avg_credit_limit_by_income": (
+            filtered_df.groupby("Income_Category")["Credit_Limit"].mean().round(2).to_dict()
+        ),
+        "churn_rate_by_card_category": (
+            filtered_df.groupby("Card_Category")["Attrition_Flag"].mean().mul(100).round(2).to_dict()
+        ),
+    }
+
+
 def initialize_chat_state() -> None:
     if "assistant_messages" not in st.session_state:
         st.session_state.assistant_messages = [
@@ -693,12 +708,13 @@ def render_ai_assistant(
     )
     context_payload.update(behavior)
     context_payload["current_filters"] = filter_context
+    context_payload["dashboard_snapshot"] = build_dashboard_snapshot(filtered_df)
     context_payload["power_bi_report_url"] = os.getenv(
         "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
     )
 
     st.markdown('<div id="ask-ai-anchor"></div>', unsafe_allow_html=True)
-    popover_label = "Ask AI"
+    popover_label = "✨ Ask AI"
     popover_context = (
         st.popover(popover_label, use_container_width=False)
         if hasattr(st, "popover")

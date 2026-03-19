@@ -33,6 +33,49 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
     patterns = context_payload.get("behavioral_patterns", {})
     segment = context_payload.get("segment_risk_snapshot", {})
     current_filters = context_payload.get("current_filters", {})
+    snapshot = context_payload.get("dashboard_snapshot", {})
+    question_lower = question.lower()
+
+    income_counts = snapshot.get("income_category_counts", {})
+    gender_counts = snapshot.get("gender_counts", {})
+    card_counts = snapshot.get("card_category_counts", {})
+    education_counts = snapshot.get("education_level_counts", {})
+
+    if income_counts and "income" in question_lower and any(
+        token in question_lower for token in ["most", "highest", "count", "maximum", "top"]
+    ):
+        top_income = max(income_counts.items(), key=lambda item: item[1])
+        return (
+            f"In the current filtered view, `{top_income[0]}` has the highest customer count "
+            f"with {top_income[1]:,} customers."
+        )
+
+    if card_counts and "card" in question_lower and any(
+        token in question_lower for token in ["most", "highest", "count", "maximum", "top"]
+    ):
+        top_card = max(card_counts.items(), key=lambda item: item[1])
+        return (
+            f"In the current filtered view, `{top_card[0]}` has the highest customer count "
+            f"with {top_card[1]:,} customers."
+        )
+
+    if gender_counts and "gender" in question_lower and any(
+        token in question_lower for token in ["most", "highest", "count", "maximum", "top"]
+    ):
+        top_gender = max(gender_counts.items(), key=lambda item: item[1])
+        return (
+            f"In the current filtered view, `{top_gender[0]}` has the highest customer count "
+            f"with {top_gender[1]:,} customers."
+        )
+
+    if education_counts and "education" in question_lower and any(
+        token in question_lower for token in ["most", "highest", "count", "maximum", "top"]
+    ):
+        top_education = max(education_counts.items(), key=lambda item: item[1])
+        return (
+            f"In the current filtered view, `{top_education[0]}` has the highest customer count "
+            f"with {top_education[1]:,} customers."
+        )
 
     top_drivers = insights.get("top_churn_drivers", [])
     drivers_text = ", ".join(top_drivers[:3]) if top_drivers else "transaction behavior and inactivity"
