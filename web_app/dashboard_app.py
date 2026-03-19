@@ -735,44 +735,45 @@ def render_ai_assistant(
             with column:
                 if st.button(example_query, key=f"assistant-example-{example_query}"):
                     st.session_state.assistant_example_question = example_query
+
+        st.markdown('<div class="assistant-subheading">Conversation</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chat-history">', unsafe_allow_html=True)
+        for message in st.session_state.assistant_messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+        st.markdown("</div>", unsafe_allow_html=True)
+
         with st.form("assistant-question-form", clear_on_submit=True):
             manual_question = st.text_input(
                 "Ask a question about the dashboard",
                 key="assistant_manual_question",
                 placeholder="Ask a question about the dashboard",
+                label_visibility="collapsed",
             )
-            submitted = st.form_submit_button("Send")
+            submitted = st.form_submit_button("Send", use_container_width=True)
 
         if submitted:
             question = manual_question.strip()
         else:
             question = st.session_state.assistant_example_question
 
-        for message in st.session_state.assistant_messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-
         if question:
             st.session_state.assistant_example_question = ""
             st.session_state.assistant_messages.append({"role": "user", "content": question})
-            with st.chat_message("user"):
-                st.write(question)
-
-            with st.chat_message("assistant"):
-                if not api_key:
-                    answer = generate_fallback_response(question, context_payload)
-                else:
-                    answer = generate_llm_response(
-                        question=question,
-                        chat_history=st.session_state.assistant_messages[:-1],
-                        context_payload=context_payload,
-                        api_key=api_key,
-                        model=model_name,
-                    )
-                st.write(answer)
-                st.session_state.assistant_messages.append(
-                    {"role": "assistant", "content": answer}
+            if not api_key:
+                answer = generate_fallback_response(question, context_payload)
+            else:
+                answer = generate_llm_response(
+                    question=question,
+                    chat_history=st.session_state.assistant_messages[:-1],
+                    context_payload=context_payload,
+                    api_key=api_key,
+                    model=model_name,
                 )
+            st.session_state.assistant_messages.append(
+                {"role": "assistant", "content": answer}
+            )
+            st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -792,6 +793,7 @@ def inject_styles() -> None:
             left: auto !important;
             top: auto !important;
             z-index: 1000 !important;
+            width: auto !important;
         }
         div[data-testid="stPopover"] > button {
             border-radius: 999px;
@@ -801,6 +803,18 @@ def inject_styles() -> None:
             box-shadow: 0 12px 26px rgba(255, 85, 99, 0.30);
             padding: 0.65rem 0.95rem;
             min-width: 110px;
+        }
+        div[data-testid="stPopoverContent"] {
+            position: fixed !important;
+            right: 24px !important;
+            left: auto !important;
+            bottom: 84px !important;
+            top: auto !important;
+            width: 430px !important;
+            max-width: calc(100vw - 40px) !important;
+            max-height: 78vh !important;
+            overflow: auto !important;
+            border-radius: 22px !important;
         }
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #131924 0%, #0d1219 100%);
@@ -900,6 +914,12 @@ def inject_styles() -> None:
         }
         .chat-panel {
             margin-top: 0.5rem;
+        }
+        .chat-history {
+            max-height: 340px;
+            overflow-y: auto;
+            padding-right: 0.2rem;
+            margin-bottom: 0.9rem;
         }
         .assistant-copy {
             color: #d0d7e1 !important;
