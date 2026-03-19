@@ -26,8 +26,8 @@ DEFAULT_POWER_BI_REPORT_URL = (
     "https://app.powerbi.com/groups/me/reports/"
     "142efc4a-bb5c-43b5-8d54-297b41ab74d6/dc6b1f534010170e5201?experience=power-bi"
 )
-COLOR_ACTIVE = "#f44346"
-COLOR_CHURN = "#7d7d7d"
+COLOR_ACTIVE = "#ff5563"
+COLOR_CHURN = "#a6acb8"
 
 DASHBOARD_PAGES = [
     (
@@ -182,15 +182,16 @@ def base_layout(fig: go.Figure, title: str, height: int = 320) -> go.Figure:
     fig.update_layout(
         title=title,
         height=height,
-        paper_bgcolor="white",
-        plot_bgcolor="white",
+        template="plotly_dark",
+        paper_bgcolor="#171b23",
+        plot_bgcolor="#171b23",
         margin=dict(l=20, r=20, t=55, b=20),
-        font=dict(color="#4b4b4b"),
-        title_font=dict(size=16, color="#505050"),
+        font=dict(color="#f3f6fb"),
+        title_font=dict(size=16, color="#f7f9fc"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
-    fig.update_xaxes(showgrid=True, gridcolor="#e8e1db", zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="#e8e1db", zeroline=False)
+    fig.update_xaxes(showgrid=True, gridcolor="#2a3242", zeroline=False, color="#f3f6fb")
+    fig.update_yaxes(showgrid=True, gridcolor="#2a3242", zeroline=False, color="#f3f6fb")
     return fig
 
 
@@ -636,8 +637,8 @@ def create_visualizations(filtered_df: pd.DataFrame) -> list[go.Figure]:
 
 def render_charts(figures: list[go.Figure]) -> None:
     st.markdown('<div class="page-heading">Interactive Charts</div>', unsafe_allow_html=True)
-    for row_start in range(0, len(figures), 3):
-        row = figures[row_start : row_start + 3]
+    for row_start in range(0, len(figures), 2):
+        row = figures[row_start : row_start + 2]
         columns = st.columns(len(row))
         for column, figure in zip(columns, row):
             with column:
@@ -693,7 +694,7 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
                 "Gemini is not installed locally, so the assistant will use a dashboard-based fallback explanation."
             )
         else:
-            st.caption(f"Gemini assistant ready with internal model `{model_name}`.")
+            st.caption(f"Gemini assistant ready. Primary model candidate: `{model_name}`.")
 
         example_queries = [
             "Why are customers churning in the current filtered view?",
@@ -745,24 +746,24 @@ def inject_styles() -> None:
         """
         <style>
         .stApp {
-            background: #f3efeb;
-            color: #4f4f4f;
+            background: #0f131a;
+            color: #f3f6fb;
         }
         section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #ffffff 0%, #f7f2ee 100%);
-            border-right: 1px solid #eadfd6;
+            background: linear-gradient(180deg, #131924 0%, #0d1219 100%);
+            border-right: 1px solid #273041;
         }
         section[data-testid="stSidebar"] * {
-            color: #5a5a5a !important;
+            color: #f3f6fb !important;
         }
         h1, h2, h3, p, label, .stMarkdown, .stCaption {
-            color: #4f4f4f !important;
+            color: #f3f6fb !important;
         }
         .sidebar-title,
         .page-heading,
         .section-heading,
         .assistant-subheading {
-            color: #4f4f4f !important;
+            color: #f7f9fc !important;
             font-weight: 800;
         }
         .sidebar-title {
@@ -783,10 +784,10 @@ def inject_styles() -> None:
         .section-card,
         .chart-card,
         .chat-panel {
-            background: #fbfbfb;
-            border: 1px solid #eadfd6;
+            background: #171b23;
+            border: 1px solid #273041;
             border-radius: 22px;
-            box-shadow: 0 10px 24px rgba(84, 68, 57, 0.10);
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
             padding: 1rem 1.1rem;
         }
         .title-card {
@@ -797,7 +798,7 @@ def inject_styles() -> None:
         }
         .title-card-text {
             text-align: center;
-            color: #8b8b8b;
+            color: #d4dae4;
             font-size: 1.65rem;
             font-weight: 800;
             letter-spacing: 0.04em;
@@ -807,23 +808,23 @@ def inject_styles() -> None:
             min-height: 150px;
         }
         .metric-label {
-            color: #656565;
+            color: #d7dde7;
             font-size: 1rem;
             font-weight: 700;
             margin-bottom: 1rem;
         }
         .metric-value {
-            background: #fffdfc;
-            border: 1px solid #efe2d7;
+            background: #10161d;
+            border: 1px solid #2a3446;
             border-radius: 12px;
-            color: #f44346;
+            color: #ff5f6b;
             font-size: 2.2rem;
             font-weight: 800;
             text-align: center;
             padding: 1rem 0.6rem;
         }
         .hero-note {
-            color: #5f5f5f;
+            color: #c8d0db;
             font-size: 0.95rem;
             margin: 0.8rem 0 1.3rem 0.15rem;
         }
@@ -831,13 +832,13 @@ def inject_styles() -> None:
             min-height: 180px;
         }
         .model-card-title {
-            color: #555555;
+            color: #f7f9fc;
             font-weight: 800;
             font-size: 1.05rem;
             margin-bottom: 0.75rem;
         }
         .model-card-content {
-            color: #666666;
+            color: #d0d7e1;
             line-height: 1.6;
         }
         .chart-card {
@@ -848,7 +849,7 @@ def inject_styles() -> None:
             margin-top: 0.5rem;
         }
         .assistant-copy {
-            color: #666666 !important;
+            color: #d0d7e1 !important;
             margin-bottom: 0.7rem;
         }
         </style>
