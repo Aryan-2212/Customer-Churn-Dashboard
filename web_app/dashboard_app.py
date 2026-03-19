@@ -664,6 +664,16 @@ def render_charts(figures: list[go.Figure]) -> None:
 
 
 def build_dashboard_snapshot(filtered_df: pd.DataFrame) -> dict:
+    active_df = filtered_df[filtered_df["Attrition_Flag"] == 0]
+    churned_df = filtered_df[filtered_df["Attrition_Flag"] == 1]
+
+    avg_credit_limit_active = round(float(active_df["Credit_Limit"].mean()), 2) if not active_df.empty else 0
+    avg_credit_limit_churned = round(float(churned_df["Credit_Limit"].mean()), 2) if not churned_df.empty else 0
+    avg_revolving_bal_active = round(float(active_df["Total_Revolving_Bal"].mean()), 2) if not active_df.empty else 0
+    avg_revolving_bal_churned = round(float(churned_df["Total_Revolving_Bal"].mean()), 2) if not churned_df.empty else 0
+    avg_util_active = round(float(active_df["Avg_Utilization_Ratio"].mean()), 3) if not active_df.empty else 0
+    avg_util_churned = round(float(churned_df["Avg_Utilization_Ratio"].mean()), 3) if not churned_df.empty else 0
+
     return {
         "income_category_counts": filtered_df["Income_Category"].value_counts().to_dict(),
         "gender_counts": filtered_df["Gender"].value_counts().to_dict(),
@@ -675,6 +685,32 @@ def build_dashboard_snapshot(filtered_df: pd.DataFrame) -> dict:
         "churn_rate_by_card_category": (
             filtered_df.groupby("Card_Category")["Attrition_Flag"].mean().mul(100).round(2).to_dict()
         ),
+        "chart_summaries": {
+            "credit_usage_vs_limit": {
+                "x_axis": "Credit_Limit",
+                "y_axis": "Total_Revolving_Bal",
+                "summary": (
+                    "This scatter plot compares credit limit with revolving balance to show how much of the available credit customers are actively using."
+                ),
+                "active_customer_pattern": (
+                    f"Active customers average a credit limit of {avg_credit_limit_active:,.0f} and a revolving balance of {avg_revolving_bal_active:,.0f}."
+                ),
+                "churned_customer_pattern": (
+                    f"Churned customers average a credit limit of {avg_credit_limit_churned:,.0f} and a revolving balance of {avg_revolving_bal_churned:,.0f}."
+                ),
+                "business_takeaway": (
+                    f"Utilization is lower for churned customers ({avg_util_churned:.3f}) than for retained customers ({avg_util_active:.3f}), which suggests weaker credit engagement is associated with churn risk."
+                ),
+            },
+            "transaction_activity_vs_churn": {
+                "summary": "This plot compares total transaction count and total transaction amount to show how customer activity separates active and churned behavior.",
+                "business_takeaway": "Higher transaction activity generally aligns with retained customers, while lower transaction volume and weaker engagement are more common among churned customers.",
+            },
+            "inactivity_vs_credit_utilization": {
+                "summary": "This chart shows how credit utilization changes across inactivity levels.",
+                "business_takeaway": "Customers with higher inactivity and lower utilization are generally more likely to appear in churn-risk patterns.",
+            },
+        },
     }
 
 
