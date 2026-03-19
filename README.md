@@ -97,9 +97,3 @@ If embed creation is enabled later, set `POWER_BI_EMBED_URL` in `.env` to displa
 - Which card category looks most at risk?
 - What actions should the business prioritize first?
 
-## Testing
-
-- Smoke tests: `tests/test_dashboard_context.py`
-- Manual validation checklist: `docs/qa_workflow.md`
-
-Note: test execution was not completed in this shell session because Python commands were hanging in the current environment.
