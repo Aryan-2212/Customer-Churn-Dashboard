@@ -1,10 +1,13 @@
 import os
 from typing import Any
 
+from dotenv import load_dotenv
+
 from prompt_template import build_system_prompt, build_user_prompt
 
 
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+load_dotenv()
 
 
 def get_openai_api_key(secrets: Any) -> str:
