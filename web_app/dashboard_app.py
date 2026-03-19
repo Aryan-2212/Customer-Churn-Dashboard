@@ -180,15 +180,22 @@ def churn_label_series(df: pd.DataFrame) -> pd.Series:
 
 def base_layout(fig: go.Figure, title: str, height: int = 320) -> go.Figure:
     fig.update_layout(
-        title=title,
+        title=dict(text=title, x=0.01, y=0.96, xanchor="left", yanchor="top"),
         height=height,
         template="plotly_dark",
         paper_bgcolor="#171b23",
         plot_bgcolor="#171b23",
-        margin=dict(l=20, r=20, t=55, b=20),
+        margin=dict(l=20, r=20, t=95, b=20),
         font=dict(color="#f3f6fb"),
         title_font=dict(size=16, color="#f7f9fc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.18,
+            xanchor="left",
+            x=0.01,
+            bgcolor="rgba(0,0,0,0)",
+        ),
     )
     fig.update_xaxes(showgrid=True, gridcolor="#2a3242", zeroline=False, color="#f3f6fb")
     fig.update_yaxes(showgrid=True, gridcolor="#2a3242", zeroline=False, color="#f3f6fb")
@@ -659,6 +666,8 @@ def initialize_chat_state() -> None:
         ]
     if "assistant_example_question" not in st.session_state:
         st.session_state.assistant_example_question = ""
+    if "assistant_manual_question" not in st.session_state:
+        st.session_state.assistant_manual_question = ""
 
 
 def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dict) -> None:
@@ -676,8 +685,15 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
         "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
     )
 
-    st.markdown('<div class="page-heading">Ask AI</div>', unsafe_allow_html=True)
-    with st.expander("💬 Open AI Assistant", expanded=False):
+    st.markdown('<div id="ask-ai-anchor"></div>', unsafe_allow_html=True)
+    popover_label = "💬 Ask AI"
+    popover_context = (
+        st.popover(popover_label, use_container_width=False)
+        if hasattr(st, "popover")
+        else st.expander(popover_label, expanded=False)
+    )
+
+    with popover_context:
         st.markdown('<div class="chat-panel">', unsafe_allow_html=True)
         st.markdown(
             '<div class="assistant-copy">The assistant uses the filtered dashboard context plus the ML churn drivers.</div>',
@@ -707,10 +723,16 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
             with column:
                 if st.button(example_query, key=f"assistant-example-{example_query}"):
                     st.session_state.assistant_example_question = example_query
-        user_question = st.chat_input(
-            "Ask a question about the dashboard", key="assistant-chat-input"
+        st.text_input(
+            "Ask a question about the dashboard",
+            key="assistant_manual_question",
+            placeholder="Ask a question about the dashboard",
         )
-        question = st.session_state.assistant_example_question or user_question
+        if st.button("Send", key="assistant-send"):
+            question = st.session_state.assistant_manual_question.strip()
+            st.session_state.assistant_manual_question = ""
+        else:
+            question = st.session_state.assistant_example_question
 
         for message in st.session_state.assistant_messages:
             with st.chat_message(message["role"]):
@@ -748,6 +770,20 @@ def inject_styles() -> None:
         .stApp {
             background: #0f131a;
             color: #f3f6fb;
+        }
+        div[data-testid="stPopover"] {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 1000;
+        }
+        div[data-testid="stPopover"] > button {
+            border-radius: 999px;
+            background: #ff5563;
+            color: white;
+            border: 0;
+            box-shadow: 0 12px 26px rgba(255, 85, 99, 0.30);
+            padding: 0.8rem 1rem;
         }
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #131924 0%, #0d1219 100%);

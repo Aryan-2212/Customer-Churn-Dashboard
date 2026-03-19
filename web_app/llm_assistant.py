@@ -74,7 +74,7 @@ def generate_llm_response(
         f"{build_system_prompt(context_payload)}\n\n"
         f"{build_user_prompt(question, chat_history)}"
     )
-    candidate_models = []
+    configured_candidates = []
     for candidate in [
         model,
         os.getenv("GEMINI_MODEL", ""),
@@ -82,16 +82,30 @@ def generate_llm_response(
         "gemini-1.5-flash",
         "gemini-1.5-flash-8b",
     ]:
+        if candidate and candidate not in configured_candidates:
+            configured_candidates.append(candidate)
+
+    available_candidates = []
+    try:
+        for listed_model in genai.list_models():
+            supported_methods = getattr(listed_model, "supported_generation_methods", []) or []
+            if "generateContent" in supported_methods:
+                model_name = getattr(listed_model, "name", "")
+                if model_name:
+                    available_candidates.append(model_name.replace("models/", ""))
+    except Exception:
+        available_candidates = []
+
+    candidate_models = []
+    for candidate in configured_candidates + available_candidates:
         if candidate and candidate not in candidate_models:
             candidate_models.append(candidate)
 
-    last_error = None
     for candidate_model in candidate_models:
         try:
             response = genai.GenerativeModel(candidate_model).generate_content(assistant_prompt)
             return (response.text or "").strip()
-        except Exception as exc:
-            last_error = exc
+        except Exception:
             continue
 
     return generate_fallback_response(question, context_payload)
