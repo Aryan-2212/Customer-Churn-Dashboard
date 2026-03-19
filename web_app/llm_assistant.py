@@ -1,5 +1,4 @@
 import os
-from typing import Any
 
 from dotenv import load_dotenv
 
@@ -10,13 +9,11 @@ DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
 load_dotenv()
 
 
-def get_gemini_api_key(secrets: Any) -> str:
-    gemini_config = secrets.get("gemini", {})
-    secret_key = gemini_config.get("api_key", "")
-    return secret_key or os.getenv("GEMINI_API_KEY", "")
+def get_gemini_api_key() -> str:
+    return os.getenv("GEMINI_API_KEY", "")
 
 
-def get_gemini_model(secrets: Any) -> str:
+def get_gemini_model() -> str:
     return DEFAULT_GEMINI_MODEL
 
 
