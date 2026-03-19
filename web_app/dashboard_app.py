@@ -82,11 +82,31 @@ def initialize_chat_state() -> None:
         ]
 
 
-def render_assistant_panel(context_payload: dict, example_queries: list[str]) -> None:
+def render_assistant_panel(
+    context_payload: dict, example_queries: list[str], dashboard_pages: list[tuple[str, str]]
+) -> None:
     st.subheader("LLM Insight Assistant")
     st.write(
         "This assistant combines the dashboard context and ML churn drivers to explain what the report means in business terms."
     )
+
+    page_options = ["All Dashboard Pages"] + [page_name for page_name, _ in dashboard_pages]
+    selected_page = st.selectbox("Assistant focus", page_options)
+    selected_page_context = next(
+        (
+            {"page": page_name, "description": description}
+            for page_name, description in dashboard_pages
+            if page_name == selected_page
+        ),
+        None,
+    )
+    active_context_payload = {
+        **context_payload,
+        "assistant_focus": selected_page_context or {
+            "page": "All Dashboard Pages",
+            "description": "Use the full dashboard context when answering.",
+        },
+    }
 
     api_key = get_openai_api_key(st.secrets)
     model_name = get_openai_model(st.secrets)
@@ -130,7 +150,7 @@ def render_assistant_panel(context_payload: dict, example_queries: list[str]) ->
                 answer = generate_llm_response(
                     question=question,
                     chat_history=st.session_state.assistant_messages[:-1],
-                    context_payload=context_payload,
+                    context_payload=active_context_payload,
                     api_key=api_key,
                     model=model_name,
                 )
@@ -195,7 +215,7 @@ with overview_col:
         st.markdown(f"**{page_name}**: {description}")
 
 with assistant_col:
-    render_assistant_panel(context_payload, example_queries)
+    render_assistant_panel(context_payload, example_queries, DASHBOARD_PAGES)
 
 st.subheader("Power BI Experience")
 if embed_url:
