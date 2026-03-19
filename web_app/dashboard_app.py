@@ -8,7 +8,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from analytics_context import build_behavioral_summary
-from llm_assistant import generate_llm_response, get_gemini_api_key, get_gemini_model
+from llm_assistant import (
+    generate_fallback_response,
+    generate_llm_response,
+    get_gemini_api_key,
+    get_gemini_model,
+    is_gemini_available,
+)
 from prompt_template import build_dashboard_context_payload
 
 
@@ -22,7 +28,6 @@ DEFAULT_POWER_BI_REPORT_URL = (
 )
 COLOR_ACTIVE = "#f44346"
 COLOR_CHURN = "#7d7d7d"
-PLOT_COLORS = [COLOR_ACTIVE, COLOR_CHURN]
 
 DASHBOARD_PAGES = [
     (
@@ -62,6 +67,7 @@ st.set_page_config(
 @st.cache_data
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH, low_memory=False)
+
     numeric_columns = [
         "Attrition_Flag",
         "Customer_Age",
@@ -92,7 +98,12 @@ def load_data() -> pd.DataFrame:
     ]
     for column in category_columns:
         if column in df.columns:
-            df[column] = df[column].astype(str).fillna("Unknown")
+            df[column] = (
+                df[column]
+                .fillna("Unknown")
+                .replace(["", "nan", "NaN", "None"], "Unknown")
+                .astype(str)
+            )
 
     return df.dropna(subset=["Attrition_Flag"])
 
@@ -110,7 +121,7 @@ def get_power_bi_links() -> tuple[str, str]:
 
 
 def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
-    st.sidebar.markdown("## Filters")
+    st.sidebar.markdown('<div class="sidebar-title">Filters</div>', unsafe_allow_html=True)
 
     age_min = int(df["Customer_Age"].min())
     age_max = int(df["Customer_Age"].max())
@@ -122,32 +133,42 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
         "Inactive Months", inactivity_min, inactivity_max, (inactivity_min, inactivity_max)
     )
 
-    gender_options = sorted(df["Gender"].dropna().unique().tolist())
-    gender_filter = st.sidebar.multiselect("Gender", gender_options, default=gender_options)
+    gender_options = ["All"] + [
+        value for value in sorted(df["Gender"].unique().tolist()) if value != "Unknown"
+    ]
+    selected_gender = st.sidebar.selectbox("Gender", gender_options, index=0)
 
-    income_options = sorted(df["Income_Category"].dropna().unique().tolist())
-    income_filter = st.sidebar.multiselect(
-        "Income Category", income_options, default=income_options
-    )
+    income_options = ["All"] + [
+        value for value in sorted(df["Income_Category"].unique().tolist()) if value != "Unknown"
+    ]
+    selected_income = st.sidebar.selectbox("Income Category", income_options, index=0)
 
-    card_options = sorted(df["Card_Category"].dropna().unique().tolist())
-    card_filter = st.sidebar.multiselect("Card Category", card_options, default=card_options)
+    card_options = ["All"] + [
+        value for value in sorted(df["Card_Category"].unique().tolist()) if value != "Unknown"
+    ]
+    selected_card = st.sidebar.selectbox("Card Category", card_options, index=0)
 
-    attrition_filter = st.sidebar.multiselect(
-        "Attrition Status",
-        options=[0, 1],
-        default=[0, 1],
-        format_func=lambda value: "Active" if value == 0 else "Churned",
-    )
+    attrition_options = ["All", "Active", "Churned"]
+    selected_attrition = st.sidebar.selectbox("Attrition Status", attrition_options, index=0)
+
+    attrition_values = [0, 1]
+    if selected_attrition == "Active":
+        attrition_values = [0]
+    elif selected_attrition == "Churned":
+        attrition_values = [1]
 
     filtered_df = df[
         (df["Customer_Age"].between(selected_age[0], selected_age[1]))
         & (df["Months_Inactive_12_mon"].between(selected_inactivity[0], selected_inactivity[1]))
-        & (df["Gender"].isin(gender_filter))
-        & (df["Income_Category"].isin(income_filter))
-        & (df["Card_Category"].isin(card_filter))
-        & (df["Attrition_Flag"].isin(attrition_filter))
+        & (df["Attrition_Flag"].isin(attrition_values))
     ].copy()
+
+    if selected_gender != "All":
+        filtered_df = filtered_df[filtered_df["Gender"] == selected_gender]
+    if selected_income != "All":
+        filtered_df = filtered_df[filtered_df["Income_Category"] == selected_income]
+    if selected_card != "All":
+        filtered_df = filtered_df[filtered_df["Card_Category"] == selected_card]
 
     st.sidebar.caption(f"Filtered customers: {len(filtered_df):,}")
     return filtered_df
@@ -157,7 +178,7 @@ def churn_label_series(df: pd.DataFrame) -> pd.Series:
     return df["Attrition_Flag"].map({0: "Active", 1: "Churned"})
 
 
-def base_layout(fig: go.Figure, title: str, height: int = 330) -> go.Figure:
+def base_layout(fig: go.Figure, title: str, height: int = 320) -> go.Figure:
     fig.update_layout(
         title=title,
         height=height,
@@ -165,7 +186,7 @@ def base_layout(fig: go.Figure, title: str, height: int = 330) -> go.Figure:
         plot_bgcolor="white",
         margin=dict(l=20, r=20, t=55, b=20),
         font=dict(color="#4b4b4b"),
-        title_font=dict(size=18, color="#505050"),
+        title_font=dict(size=16, color="#505050"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
     fig.update_xaxes(showgrid=True, gridcolor="#e8e1db", zeroline=False)
@@ -227,7 +248,7 @@ def render_dataset_summary(filtered_df: pd.DataFrame) -> None:
 
     with summary_cols[0]:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.subheader("Dataset Summary")
+        st.markdown('<div class="section-heading">Dataset Summary</div>', unsafe_allow_html=True)
         preview_columns = [
             "Customer_Age",
             "Gender",
@@ -245,7 +266,7 @@ def render_dataset_summary(filtered_df: pd.DataFrame) -> None:
 
     with summary_cols[1]:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.subheader("Dashboard Context")
+        st.markdown('<div class="section-heading">Dashboard Context</div>', unsafe_allow_html=True)
         for page_name, description in DASHBOARD_PAGES:
             st.markdown(f"**{page_name}**: {description}")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -452,7 +473,6 @@ def create_visualizations(filtered_df: pd.DataFrame) -> list[go.Figure]:
         y="Total_Trans_Ct_Sum",
         color="Attrition_Label",
         color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
-        size_max=16,
     )
     base_layout(trans_inactive_scatter, "Total Transaction Count vs Inactive Months")
 
@@ -567,7 +587,7 @@ def create_visualizations(filtered_df: pd.DataFrame) -> list[go.Figure]:
         color_discrete_map={"F": COLOR_ACTIVE, "M": COLOR_CHURN},
         text_auto=".2s",
     )
-    base_layout(segmentation_chart, "Customer Segmentation by Income, Gender and Education")
+    base_layout(segmentation_chart, "Customer Segmentation by Gender and Education")
 
     behavior_scatter = px.scatter(
         df,
@@ -615,18 +635,9 @@ def create_visualizations(filtered_df: pd.DataFrame) -> list[go.Figure]:
 
 
 def render_charts(figures: list[go.Figure]) -> None:
-    st.subheader("Interactive Charts")
-    chart_rows = [
-        figures[0:3],
-        figures[3:6],
-        figures[6:9],
-        figures[9:12],
-        figures[12:16],
-        figures[16:19],
-        figures[19:21],
-    ]
-
-    for row in chart_rows:
+    st.markdown('<div class="page-heading">Interactive Charts</div>', unsafe_allow_html=True)
+    for row_start in range(0, len(figures), 3):
+        row = figures[row_start : row_start + 3]
         columns = st.columns(len(row))
         for column, figure in zip(columns, row):
             with column:
@@ -645,8 +656,6 @@ def initialize_chat_state() -> None:
                 ),
             }
         ]
-    if "chat_open" not in st.session_state:
-        st.session_state.chat_open = False
     if "assistant_example_question" not in st.session_state:
         st.session_state.assistant_example_question = ""
 
@@ -666,44 +675,23 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
         "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
     )
 
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stButton"][id*="floating-chat"] {
-            position: fixed;
-            right: 24px;
-            bottom: 24px;
-            z-index: 9999;
-        }
-        div[data-testid="stButton"][id*="floating-chat"] button {
-            border-radius: 999px;
-            background: #f44346;
-            color: white;
-            border: none;
-            padding: 0.8rem 1.1rem;
-            box-shadow: 0 10px 24px rgba(244, 67, 70, 0.28);
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    button_label = "Close AI Panel" if st.session_state.chat_open else "Ask AI"
-    if st.button(f"💬 {button_label}", key="floating-chat-toggle"):
-        st.session_state.chat_open = not st.session_state.chat_open
-
-    if not st.session_state.chat_open:
-        return
-
-    with st.container():
+    st.markdown('<div class="page-heading">Ask AI</div>', unsafe_allow_html=True)
+    with st.expander("💬 Open AI Assistant", expanded=False):
         st.markdown('<div class="chat-panel">', unsafe_allow_html=True)
-        st.subheader("Ask AI")
-        st.caption("The assistant uses the filtered dashboard context plus the ML churn drivers.")
+        st.markdown(
+            '<div class="assistant-copy">The assistant uses the filtered dashboard context plus the ML churn drivers.</div>',
+            unsafe_allow_html=True,
+        )
 
         api_key = get_gemini_api_key()
         model_name = get_gemini_model()
+        gemini_available = is_gemini_available()
         if not api_key:
-            st.warning("Add `GEMINI_API_KEY` to your `.env` file to enable the assistant.")
+            st.info("Add `GEMINI_API_KEY` to your `.env` file to enable Gemini responses.")
+        elif not gemini_available:
+            st.info(
+                "Gemini is not installed locally, so the assistant will use a dashboard-based fallback explanation."
+            )
         else:
             st.caption(f"Gemini assistant ready with internal model `{model_name}`.")
 
@@ -712,13 +700,15 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
             "Which segments in these charts look most at risk?",
             "What actions can reduce churn for this filtered segment?",
         ]
-        st.markdown("**Quick questions**")
+        st.markdown('<div class="assistant-subheading">Quick questions</div>', unsafe_allow_html=True)
         example_columns = st.columns(len(example_queries))
         for column, example_query in zip(example_columns, example_queries):
             with column:
                 if st.button(example_query, key=f"assistant-example-{example_query}"):
                     st.session_state.assistant_example_question = example_query
-        user_question = st.chat_input("Ask a question about the dashboard")
+        user_question = st.chat_input(
+            "Ask a question about the dashboard", key="assistant-chat-input"
+        )
         question = st.session_state.assistant_example_question or user_question
 
         for message in st.session_state.assistant_messages:
@@ -733,25 +723,20 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
 
             with st.chat_message("assistant"):
                 if not api_key:
-                    answer = (
-                        "The assistant is connected to the dashboard context, but the Gemini API key "
-                        "is missing from `.env`."
-                    )
+                    answer = generate_fallback_response(question, context_payload)
                 else:
-                    try:
-                        answer = generate_llm_response(
-                            question=question,
-                            chat_history=st.session_state.assistant_messages[:-1],
-                            context_payload=context_payload,
-                            api_key=api_key,
-                            model=model_name,
-                        )
-                    except Exception as exc:
-                        answer = f"Gemini request failed: {exc}"
+                    answer = generate_llm_response(
+                        question=question,
+                        chat_history=st.session_state.assistant_messages[:-1],
+                        context_payload=context_payload,
+                        api_key=api_key,
+                        model=model_name,
+                    )
                 st.write(answer)
                 st.session_state.assistant_messages.append(
                     {"role": "assistant", "content": answer}
                 )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -761,10 +746,37 @@ def inject_styles() -> None:
         <style>
         .stApp {
             background: #f3efeb;
+            color: #4f4f4f;
         }
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #ffffff 0%, #f7f2ee 100%);
             border-right: 1px solid #eadfd6;
+        }
+        section[data-testid="stSidebar"] * {
+            color: #5a5a5a !important;
+        }
+        h1, h2, h3, p, label, .stMarkdown, .stCaption {
+            color: #4f4f4f !important;
+        }
+        .sidebar-title,
+        .page-heading,
+        .section-heading,
+        .assistant-subheading {
+            color: #4f4f4f !important;
+            font-weight: 800;
+        }
+        .sidebar-title {
+            font-size: 1.4rem;
+            margin-bottom: 0.85rem;
+        }
+        .page-heading {
+            font-size: 1.8rem;
+            margin: 1.4rem 0 0.85rem 0;
+        }
+        .section-heading,
+        .assistant-subheading {
+            font-size: 1.35rem;
+            margin-bottom: 0.7rem;
         }
         .title-card,
         .metric-card,
@@ -833,8 +845,11 @@ def inject_styles() -> None:
             padding: 0.35rem 0.5rem 0.2rem 0.5rem;
         }
         .chat-panel {
-            margin-top: 1.5rem;
-            margin-bottom: 5rem;
+            margin-top: 0.5rem;
+        }
+        .assistant-copy {
+            color: #666666 !important;
+            margin-bottom: 0.7rem;
         }
         </style>
         """,
@@ -855,12 +870,12 @@ if filtered_df.empty:
 
 render_header(filtered_df, full_df, insights)
 render_dataset_summary(filtered_df)
-st.subheader("Model Insights")
+st.markdown('<div class="page-heading">Model Insights</div>', unsafe_allow_html=True)
 behavior_summary = render_model_insights(filtered_df, insights)
 figures = create_visualizations(filtered_df)
 render_charts(figures)
 
-st.subheader("Power BI Report Link")
+st.markdown('<div class="page-heading">Power BI Report Link</div>', unsafe_allow_html=True)
 if embed_url:
     st.markdown(f"[Open embedded Power BI report]({embed_url})")
 else:
