@@ -81,6 +81,12 @@ def initialize_chat_state() -> None:
                 ),
             }
         ]
+    if "pending_question" not in st.session_state:
+        st.session_state.pending_question = ""
+
+
+def queue_example_question(question: str) -> None:
+    st.session_state.pending_question = question
 
 
 def render_assistant_panel(
@@ -119,16 +125,20 @@ def render_assistant_panel(
         )
 
     st.markdown("**Suggested questions**")
-    for question in example_queries:
-        st.markdown(f"- {question}")
+    for index, example_query in enumerate(example_queries, start=1):
+        if st.button(example_query, key=f"example-query-{index}", use_container_width=True):
+            queue_example_question(example_query)
 
     for message in st.session_state.assistant_messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-    question = st.chat_input("Ask the churn assistant a question")
+    question = st.session_state.pending_question or st.chat_input(
+        "Ask the churn assistant a question"
+    )
     if not question:
         return
+    st.session_state.pending_question = ""
 
     st.session_state.assistant_messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
