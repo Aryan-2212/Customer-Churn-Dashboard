@@ -40,9 +40,18 @@ def polish_response_text(response_text: str) -> str:
         "The current context does not contain": "This view does not show",
         "However, the dashboard indicates": "Still, the dashboard shows",
         "However, the provided context": "Still,",
+        "I can see that ": "",
+        "I can see ": "",
+        "While the exact details shown in that specific scatter plot aren't available in this summary, ": "",
+        "While the exact details aren't available in this summary, ": "",
+        "While the exact details are not available in this summary, ": "",
+        "The \"Credit Usage\" page of the dashboard focuses on ": "The chart is about ",
+        "the \"Credit Usage\" page of the dashboard focuses on ": "the chart is about ",
     }
     for old_text, new_text in replacements.items():
         cleaned = cleaned.replace(old_text, new_text)
+    cleaned = cleaned.replace("This suggests that", "That suggests")
+    cleaned = cleaned.replace("This means that", "That means")
     return cleaned
 
 
