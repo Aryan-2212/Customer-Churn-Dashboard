@@ -706,6 +706,10 @@ def build_dashboard_snapshot(filtered_df: pd.DataFrame) -> dict:
                 "summary": "This plot compares total transaction count and total transaction amount to show how customer activity separates active and churned behavior.",
                 "business_takeaway": "Higher transaction activity generally aligns with retained customers, while lower transaction volume and weaker engagement are more common among churned customers.",
             },
+            "transaction_count_vs_inactive_months": {
+                "summary": "This chart compares total transaction count against inactive months to show how customer activity changes as inactivity rises.",
+                "business_takeaway": "Customers with more inactive months generally show weaker transaction activity, which supports the broader churn pattern that lower engagement and inactivity move together.",
+            },
             "inactivity_vs_credit_utilization": {
                 "summary": "This chart shows how credit utilization changes across inactivity levels.",
                 "business_takeaway": "Customers with higher inactivity and lower utilization are generally more likely to appear in churn-risk patterns.",

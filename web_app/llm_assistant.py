@@ -65,6 +65,38 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
     chart_summaries = snapshot.get("chart_summaries", {})
     question_lower = question.lower()
 
+    gratitude_tokens = ["thanks", "thank you", "ok", "okay", "great", "nice", "helpful"]
+    if any(token == question_lower.strip() or question_lower.strip().startswith(f"{token} ") for token in gratitude_tokens):
+        return "Happy to help. Ask me anything about the dashboard, churn drivers, risky segments, or the charts."
+
+    project_tokens = [
+        "churn",
+        "customer",
+        "dashboard",
+        "chart",
+        "graph",
+        "plot",
+        "income",
+        "gender",
+        "card",
+        "credit",
+        "limit",
+        "utilization",
+        "revolving",
+        "transaction",
+        "inactive",
+        "inactivity",
+        "education",
+        "segment",
+        "risk",
+        "model",
+    ]
+    if not any(token in question_lower for token in project_tokens):
+        return (
+            "I can help with questions about this churn dashboard, the model insights, customer segments, or the charts. "
+            "If you want, ask about churn drivers, risky groups, or what a specific visual means."
+        )
+
     income_counts = snapshot.get("income_category_counts", {})
     gender_counts = snapshot.get("gender_counts", {})
     card_counts = snapshot.get("card_category_counts", {})
@@ -120,6 +152,12 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
             chart_info = chart_summaries.get("transaction_activity_vs_churn", {})
             return (
                 f"That chart is meant to show how customer activity separates retained and churned behavior. "
+                f"{chart_info.get('summary', '')} {chart_info.get('business_takeaway', '')}"
+            ).strip()
+        if any(token in question_lower for token in ["transaction count", "inactive month", "inactive months", "inactivity"]):
+            chart_info = chart_summaries.get("transaction_count_vs_inactive_months", {})
+            return (
+                f"That chart is showing how transaction activity changes as customer inactivity increases. "
                 f"{chart_info.get('summary', '')} {chart_info.get('business_takeaway', '')}"
             ).strip()
         if any(token in question_lower for token in ["inactivity", "utilization"]):
