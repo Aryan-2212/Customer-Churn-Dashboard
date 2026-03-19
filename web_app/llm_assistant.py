@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from prompt_template import build_system_prompt, build_user_prompt
 
 
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 load_dotenv()
 
 
@@ -15,7 +15,7 @@ def get_gemini_api_key() -> str:
 
 
 def get_gemini_model() -> str:
-    return DEFAULT_GEMINI_MODEL
+    return os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
 
 def is_gemini_available() -> bool:
@@ -74,5 +74,24 @@ def generate_llm_response(
         f"{build_system_prompt(context_payload)}\n\n"
         f"{build_user_prompt(question, chat_history)}"
     )
-    response = genai.GenerativeModel(model).generate_content(assistant_prompt)
-    return (response.text or "").strip()
+    candidate_models = []
+    for candidate in [
+        model,
+        os.getenv("GEMINI_MODEL", ""),
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+    ]:
+        if candidate and candidate not in candidate_models:
+            candidate_models.append(candidate)
+
+    last_error = None
+    for candidate_model in candidate_models:
+        try:
+            response = genai.GenerativeModel(candidate_model).generate_content(assistant_prompt)
+            return (response.text or "").strip()
+        except Exception as exc:
+            last_error = exc
+            continue
+
+    return generate_fallback_response(question, context_payload)
