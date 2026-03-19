@@ -9,7 +9,7 @@ st.title("AI-Powered Customer Churn Dashboard")
 def load_data():
     df=pd.read_csv("BankChurners_Cleaned.csv")
     return df
-data = load_data()
+df = load_data()
 
 st.write("Dataset loaded successfully")
 
