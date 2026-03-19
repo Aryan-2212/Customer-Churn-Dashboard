@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
-import streamlit.components.v1 as components
-from streamlit.errors import StreamlitSecretNotFoundError
 
 from analytics_context import build_behavioral_summary
 from llm_assistant import generate_llm_response, get_gemini_api_key, get_gemini_model
@@ -20,41 +20,81 @@ DEFAULT_POWER_BI_REPORT_URL = (
     "https://app.powerbi.com/groups/me/reports/"
     "142efc4a-bb5c-43b5-8d54-297b41ab74d6/dc6b1f534010170e5201?experience=power-bi"
 )
+COLOR_ACTIVE = "#f44346"
+COLOR_CHURN = "#7d7d7d"
+PLOT_COLORS = [COLOR_ACTIVE, COLOR_CHURN]
 
 DASHBOARD_PAGES = [
     (
         "Customer Overview",
-        "High-level KPIs for total customers, churn rate, active vs attrited segments, and overall account health.",
+        "High-level KPIs for customer base, attrition rate, and overall account health.",
     ),
     (
         "Demographics",
-        "Breakdown of churn trends by age band, gender, education level, marital status, and income category.",
+        "Age, gender, education, marital status, and income distribution patterns.",
     ),
     (
         "Card Category Analysis",
-        "Comparison of churn behavior across card tiers to identify higher-risk product segments.",
+        "How card type and credit profile correlate with churn outcomes.",
     ),
     (
         "Transaction Behavior",
-        "Analysis of transaction amount, transaction count, and changing spend patterns linked to churn risk.",
+        "Transaction count, amount, and spend change patterns tied to churn.",
     ),
     (
         "Credit Usage",
-        "Focus on revolving balance, utilization ratio, credit limit, and repayment behavior.",
+        "Credit limit, revolving balance, and utilization relationships.",
     ),
     (
         "Customer Engagement",
-        "Tracks inactivity, relationship duration, contact frequency, and engagement signals that precede churn.",
+        "Inactivity, contacts, tenure, and relationship signals connected to churn.",
     ),
 ]
 
 
-st.set_page_config(page_title="AI-Powered Customer Churn Dashboard", layout="wide")
+st.set_page_config(
+    page_title="AI-Powered Customer Churn Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
-    return pd.read_csv(DATA_PATH, low_memory=False)
+    df = pd.read_csv(DATA_PATH, low_memory=False)
+    numeric_columns = [
+        "Attrition_Flag",
+        "Customer_Age",
+        "Dependent_count",
+        "Months_on_book",
+        "Total_Relationship_Count",
+        "Months_Inactive_12_mon",
+        "Contacts_Count_12_mon",
+        "Credit_Limit",
+        "Total_Revolving_Bal",
+        "Avg_Open_To_Buy",
+        "Total_Amt_Chng_Q4_Q1",
+        "Total_Trans_Amt",
+        "Total_Trans_Ct",
+        "Total_Ct_Chng_Q4_Q1",
+        "Avg_Utilization_Ratio",
+    ]
+    for column in numeric_columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    category_columns = [
+        "Gender",
+        "Education_Level",
+        "Marital_Status",
+        "Income_Category",
+        "Card_Category",
+    ]
+    for column in category_columns:
+        if column in df.columns:
+            df[column] = df[column].astype(str).fillna("Unknown")
+
+    return df.dropna(subset=["Attrition_Flag"])
 
 
 @st.cache_data
@@ -63,21 +103,536 @@ def load_insights() -> dict:
         return json.load(insights_file)
 
 
-def get_streamlit_secrets() -> dict:
-    try:
-        return dict(st.secrets)
-    except StreamlitSecretNotFoundError:
-        return {}
-
-
 def get_power_bi_links() -> tuple[str, str]:
-    secrets = get_streamlit_secrets()
-    power_bi_config = secrets.get("power_bi", {})
-    embed_url = power_bi_config.get("embed_url", "") or os.getenv("POWER_BI_EMBED_URL", "")
-    report_url = power_bi_config.get("report_url", "") or os.getenv(
-        "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
-    )
+    embed_url = os.getenv("POWER_BI_EMBED_URL", "")
+    report_url = os.getenv("POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL)
     return embed_url, report_url
+
+
+def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
+    st.sidebar.markdown("## Filters")
+
+    age_min = int(df["Customer_Age"].min())
+    age_max = int(df["Customer_Age"].max())
+    selected_age = st.sidebar.slider("Age Range", age_min, age_max, (age_min, age_max))
+
+    inactivity_min = int(df["Months_Inactive_12_mon"].min())
+    inactivity_max = int(df["Months_Inactive_12_mon"].max())
+    selected_inactivity = st.sidebar.slider(
+        "Inactive Months", inactivity_min, inactivity_max, (inactivity_min, inactivity_max)
+    )
+
+    gender_options = sorted(df["Gender"].dropna().unique().tolist())
+    gender_filter = st.sidebar.multiselect("Gender", gender_options, default=gender_options)
+
+    income_options = sorted(df["Income_Category"].dropna().unique().tolist())
+    income_filter = st.sidebar.multiselect(
+        "Income Category", income_options, default=income_options
+    )
+
+    card_options = sorted(df["Card_Category"].dropna().unique().tolist())
+    card_filter = st.sidebar.multiselect("Card Category", card_options, default=card_options)
+
+    attrition_filter = st.sidebar.multiselect(
+        "Attrition Status",
+        options=[0, 1],
+        default=[0, 1],
+        format_func=lambda value: "Active" if value == 0 else "Churned",
+    )
+
+    filtered_df = df[
+        (df["Customer_Age"].between(selected_age[0], selected_age[1]))
+        & (df["Months_Inactive_12_mon"].between(selected_inactivity[0], selected_inactivity[1]))
+        & (df["Gender"].isin(gender_filter))
+        & (df["Income_Category"].isin(income_filter))
+        & (df["Card_Category"].isin(card_filter))
+        & (df["Attrition_Flag"].isin(attrition_filter))
+    ].copy()
+
+    st.sidebar.caption(f"Filtered customers: {len(filtered_df):,}")
+    return filtered_df
+
+
+def churn_label_series(df: pd.DataFrame) -> pd.Series:
+    return df["Attrition_Flag"].map({0: "Active", 1: "Churned"})
+
+
+def base_layout(fig: go.Figure, title: str, height: int = 330) -> go.Figure:
+    fig.update_layout(
+        title=title,
+        height=height,
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        margin=dict(l=20, r=20, t=55, b=20),
+        font=dict(color="#4b4b4b"),
+        title_font=dict(size=18, color="#505050"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.update_xaxes(showgrid=True, gridcolor="#e8e1db", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor="#e8e1db", zeroline=False)
+    return fig
+
+
+def create_kpi_card(label: str, value: str) -> None:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_header(filtered_df: pd.DataFrame, full_df: pd.DataFrame, insights: dict) -> None:
+    header_cols = st.columns([1.1, 1, 1, 1, 1])
+    inactive_customers = int((filtered_df["Months_Inactive_12_mon"] >= 3).sum())
+    avg_credit_limit = filtered_df["Credit_Limit"].mean()
+
+    with header_cols[0]:
+        st.markdown(
+            """
+            <div class="title-card">
+                <div class="title-card-text">CUSTOMER<br>CHURN<br>DASHBOARD</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with header_cols[1]:
+        create_kpi_card("Total Customer", f"{len(filtered_df)/1000:.3f}K")
+    with header_cols[2]:
+        create_kpi_card("Churned Customer", f"{filtered_df['Attrition_Flag'].sum()/1000:.3f}K")
+    with header_cols[3]:
+        create_kpi_card("Inactive Customers", f"{inactive_customers/1000:.3f}K")
+    with header_cols[4]:
+        create_kpi_card("Average Credit Limit", f"{avg_credit_limit/1000:.2f}K")
+
+    st.markdown(
+        f"""
+        <div class="hero-note">
+            Filtered churn rate: <strong>{filtered_df['Attrition_Flag'].mean() * 100:.2f}%</strong>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            Full dataset customers: <strong>{len(full_df):,}</strong>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            Best model: <strong>{insights.get("best_model", "Random Forest")}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_dataset_summary(filtered_df: pd.DataFrame) -> None:
+    summary_cols = st.columns([1.25, 1])
+
+    with summary_cols[0]:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Dataset Summary")
+        preview_columns = [
+            "Customer_Age",
+            "Gender",
+            "Income_Category",
+            "Card_Category",
+            "Months_Inactive_12_mon",
+            "Total_Trans_Amt",
+            "Total_Trans_Ct",
+            "Avg_Utilization_Ratio",
+            "Attrition_Flag",
+        ]
+        preview_columns = [col for col in preview_columns if col in filtered_df.columns]
+        st.dataframe(filtered_df[preview_columns].head(12), use_container_width=True, height=330)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with summary_cols[1]:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Dashboard Context")
+        for page_name, description in DASHBOARD_PAGES:
+            st.markdown(f"**{page_name}**: {description}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_model_insights(filtered_df: pd.DataFrame, insights: dict) -> dict:
+    top_drivers = insights.get("top_churn_drivers", [])
+    behavior = build_behavioral_summary(filtered_df)
+    patterns = behavior["behavioral_patterns"]
+    segment_snapshot = behavior["segment_risk_snapshot"]
+
+    insight_cols = st.columns([1, 1, 1])
+    cards = [
+        (
+            "Top Churn Drivers",
+            "<br>".join(f"{index}. {driver}" for index, driver in enumerate(top_drivers, start=1)),
+        ),
+        (
+            "Behavior Snapshot",
+            (
+                f"Transactions drop from <strong>{patterns['avg_transaction_count_retained']:.1f}</strong> to "
+                f"<strong>{patterns['avg_transaction_count_churned']:.1f}</strong><br>"
+                f"Inactivity rises from <strong>{patterns['avg_inactive_months_retained']:.1f}</strong> to "
+                f"<strong>{patterns['avg_inactive_months_churned']:.1f}</strong>"
+            ),
+        ),
+        (
+            "Segment Risk",
+            (
+                f"Highest-risk card category: <strong>{segment_snapshot['highest_risk_card_category']}</strong><br>"
+                f"Churn rate in that segment: <strong>{segment_snapshot['highest_risk_card_churn_rate_percent']:.2f}%</strong>"
+            ),
+        ),
+    ]
+
+    for column, (title, content) in zip(insight_cols, cards):
+        with column:
+            st.markdown(
+                f"""
+                <div class="section-card model-card">
+                    <div class="model-card-title">{title}</div>
+                    <div class="model-card-content">{content}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    return behavior
+
+
+def create_visualizations(filtered_df: pd.DataFrame) -> list[go.Figure]:
+    df = filtered_df.copy()
+    df["Attrition_Label"] = churn_label_series(df)
+
+    age_hist = px.histogram(
+        df,
+        x="Customer_Age",
+        nbins=35,
+        color_discrete_sequence=[COLOR_ACTIVE],
+    )
+    age_hist.update_traces(marker_line_width=0)
+    base_layout(age_hist, "Age Distribution")
+
+    gender_counts = df["Gender"].value_counts().reset_index()
+    gender_counts.columns = ["Gender", "Count"]
+    gender_donut = px.pie(
+        gender_counts,
+        names="Gender",
+        values="Count",
+        hole=0.58,
+        color="Gender",
+        color_discrete_sequence=[COLOR_ACTIVE, "#c2c2c2"],
+    )
+    base_layout(gender_donut, "Gender Distribution")
+
+    income_order = [
+        "Less than $40K",
+        "$40K - $60K",
+        "$60K - $80K",
+        "$80K - $120K",
+        "$120K +",
+        "Unknown",
+    ]
+    income_counts = (
+        df["Income_Category"]
+        .value_counts()
+        .rename_axis("Income_Category")
+        .reset_index(name="Count")
+    )
+    income_counts["Income_Category"] = pd.Categorical(
+        income_counts["Income_Category"], categories=income_order, ordered=True
+    )
+    income_counts = income_counts.sort_values("Income_Category")
+    income_bar = px.bar(
+        income_counts,
+        x="Count",
+        y="Income_Category",
+        orientation="h",
+        color_discrete_sequence=[COLOR_ACTIVE],
+        text_auto=".2s",
+    )
+    base_layout(income_bar, "Income Category")
+
+    churn_counts = (
+        df["Attrition_Label"].value_counts().rename_axis("Attrition").reset_index(name="Count")
+    )
+    churn_donut = px.pie(
+        churn_counts,
+        names="Attrition",
+        values="Count",
+        hole=0.62,
+        color="Attrition",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(churn_donut, "Customer Churn Distribution")
+
+    card_dist = (
+        df.groupby(["Card_Category", "Attrition_Label"]).size().reset_index(name="Count")
+    )
+    card_bar = px.bar(
+        card_dist,
+        x="Count",
+        y="Card_Category",
+        color="Attrition_Label",
+        orientation="h",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        text_auto=".2s",
+    )
+    base_layout(card_bar, "Customer Distribution by Card Category")
+
+    gender_attr = df.groupby(["Gender", "Attrition_Label"]).size().reset_index(name="Count")
+    gender_bar = px.bar(
+        gender_attr,
+        x="Gender",
+        y="Count",
+        color="Attrition_Label",
+        barmode="stack",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(gender_bar, "Gender Count")
+
+    transaction_scatter = px.scatter(
+        df,
+        x="Total_Trans_Ct",
+        y="Total_Trans_Amt",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        opacity=0.7,
+    )
+    base_layout(transaction_scatter, "Transaction Activity vs Churn")
+
+    inactivity_bar = (
+        df.groupby(["Months_Inactive_12_mon", "Attrition_Label"])
+        .size()
+        .reset_index(name="Count")
+        .sort_values("Months_Inactive_12_mon")
+    )
+    inactivity_chart = px.bar(
+        inactivity_bar,
+        x="Count",
+        y="Months_Inactive_12_mon",
+        color="Attrition_Label",
+        orientation="h",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(inactivity_chart, "Customer Inactivity Analysis")
+
+    credit_usage_scatter = px.scatter(
+        df,
+        x="Credit_Limit",
+        y="Total_Revolving_Bal",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        opacity=0.65,
+    )
+    base_layout(credit_usage_scatter, "Credit Usage vs Credit Limit")
+
+    months_book = (
+        df.groupby(["Months_on_book", "Attrition_Label"])["Months_on_book"]
+        .sum()
+        .reset_index(name="Sum_Months_on_book")
+    )
+    months_book_chart = px.bar(
+        months_book,
+        x="Sum_Months_on_book",
+        y="Months_on_book",
+        orientation="h",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(months_book_chart, "Months on Book by Attrition")
+
+    trans_by_inactive = (
+        df.groupby(["Months_Inactive_12_mon", "Attrition_Label"])["Total_Trans_Ct"]
+        .sum()
+        .reset_index(name="Total_Trans_Ct_Sum")
+    )
+    trans_inactive_scatter = px.scatter(
+        trans_by_inactive,
+        x="Months_Inactive_12_mon",
+        y="Total_Trans_Ct_Sum",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        size_max=16,
+    )
+    base_layout(trans_inactive_scatter, "Total Transaction Count vs Inactive Months")
+
+    trans_amount_card = (
+        df.groupby(["Card_Category", "Attrition_Label"])["Total_Trans_Amt"]
+        .sum()
+        .reset_index(name="Total_Trans_Amt_Sum")
+    )
+    trans_amount_chart = px.bar(
+        trans_amount_card,
+        x="Total_Trans_Amt_Sum",
+        y="Card_Category",
+        orientation="h",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        text_auto=".2s",
+    )
+    base_layout(trans_amount_chart, "Transaction Amount by Card Category")
+
+    credit_limit_hist = px.histogram(
+        df,
+        x="Credit_Limit",
+        nbins=100,
+        color_discrete_sequence=[COLOR_ACTIVE],
+    )
+    base_layout(credit_limit_hist, "Count of Credit Limit")
+
+    credit_vs_trans = px.scatter(
+        df,
+        x="Credit_Limit",
+        y="Total_Trans_Amt",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        opacity=0.7,
+    )
+    base_layout(credit_vs_trans, "Credit Limit and Transaction Amount")
+
+    education_attr = (
+        df.groupby(["Education_Level", "Attrition_Label"]).size().reset_index(name="Count")
+    )
+    education_chart = px.bar(
+        education_attr,
+        x="Count",
+        y="Education_Level",
+        orientation="h",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(education_chart, "Education Level vs Attrition")
+
+    avg_credit_income = (
+        df.groupby(["Income_Category", "Attrition_Label"])["Credit_Limit"]
+        .mean()
+        .reset_index(name="Average_Credit_Limit")
+    )
+    avg_credit_income["Income_Category"] = pd.Categorical(
+        avg_credit_income["Income_Category"], categories=income_order, ordered=True
+    )
+    avg_credit_income = avg_credit_income.sort_values("Income_Category")
+    avg_credit_income_chart = px.bar(
+        avg_credit_income,
+        x="Average_Credit_Limit",
+        y="Income_Category",
+        orientation="h",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+    )
+    base_layout(avg_credit_income_chart, "Average Credit Limit by Income Category")
+
+    category_vs_churn = (
+        df.groupby(["Card_Category", "Attrition_Label"])["Total_Trans_Amt"]
+        .sum()
+        .reset_index(name="Customer_Transaction_Value")
+    )
+    category_chart = px.bar(
+        category_vs_churn,
+        x="Card_Category",
+        y="Customer_Transaction_Value",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        text_auto=".2s",
+    )
+    base_layout(category_chart, "Category vs Churn")
+
+    dependents_chart_data = (
+        df.groupby(["Dependent_count", "Attrition_Label"]).size().reset_index(name="Count")
+    )
+    dependents_chart = px.bar(
+        dependents_chart_data,
+        x="Dependent_count",
+        y="Count",
+        color="Attrition_Label",
+        barmode="group",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        text_auto=".2s",
+    )
+    base_layout(dependents_chart, "Dependents vs Churn")
+
+    segmentation_chart_data = (
+        df.groupby(["Education_Level", "Gender"]).size().reset_index(name="Count")
+    )
+    segmentation_chart = px.bar(
+        segmentation_chart_data,
+        x="Education_Level",
+        y="Count",
+        color="Gender",
+        barmode="stack",
+        color_discrete_map={"F": COLOR_ACTIVE, "M": COLOR_CHURN},
+        text_auto=".2s",
+    )
+    base_layout(segmentation_chart, "Customer Segmentation by Income, Gender and Education")
+
+    behavior_scatter = px.scatter(
+        df,
+        x="Total_Amt_Chng_Q4_Q1",
+        y="Total_Trans_Ct",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        opacity=0.7,
+    )
+    base_layout(behavior_scatter, "Customer Transaction Behavior vs Churn")
+
+    inactivity_utilization = px.scatter(
+        df,
+        x="Months_Inactive_12_mon",
+        y="Avg_Utilization_Ratio",
+        color="Attrition_Label",
+        color_discrete_map={"Active": COLOR_ACTIVE, "Churned": COLOR_CHURN},
+        opacity=0.7,
+    )
+    base_layout(inactivity_utilization, "Inactivity vs Credit Utilization")
+
+    return [
+        age_hist,
+        gender_donut,
+        income_bar,
+        churn_donut,
+        card_bar,
+        gender_bar,
+        transaction_scatter,
+        inactivity_chart,
+        credit_usage_scatter,
+        months_book_chart,
+        trans_inactive_scatter,
+        trans_amount_chart,
+        credit_limit_hist,
+        credit_vs_trans,
+        education_chart,
+        avg_credit_income_chart,
+        category_chart,
+        dependents_chart,
+        segmentation_chart,
+        behavior_scatter,
+        inactivity_utilization,
+    ]
+
+
+def render_charts(figures: list[go.Figure]) -> None:
+    st.subheader("Interactive Charts")
+    chart_rows = [
+        figures[0:3],
+        figures[3:6],
+        figures[6:9],
+        figures[9:12],
+        figures[12:16],
+        figures[16:19],
+        figures[19:21],
+    ]
+
+    for row in chart_rows:
+        columns = st.columns(len(row))
+        for column, figure in zip(columns, row):
+            with column:
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
+                st.markdown("</div>", unsafe_allow_html=True)
 
 
 def initialize_chat_state() -> None:
@@ -86,181 +641,229 @@ def initialize_chat_state() -> None:
             {
                 "role": "assistant",
                 "content": (
-                    "Ask about churn drivers, risky customer behavior, or what each dashboard page means."
+                    "Ask about churn drivers, risky customer groups, or what the filtered charts suggest."
                 ),
             }
         ]
-    if "pending_question" not in st.session_state:
-        st.session_state.pending_question = ""
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
+    if "assistant_example_question" not in st.session_state:
+        st.session_state.assistant_example_question = ""
 
 
-def queue_example_question(question: str) -> None:
-    st.session_state.pending_question = question
-
-
-def render_assistant_panel(
-    context_payload: dict, example_queries: list[str], dashboard_pages: list[tuple[str, str]]
-) -> None:
-    st.subheader("LLM Insight Assistant")
-    st.write(
-        "This assistant combines the dashboard context and ML churn drivers to explain what the report means in business terms."
+def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dict) -> None:
+    top_drivers = insights.get("top_churn_drivers", [])
+    context_payload = build_dashboard_context_payload(
+        dataset_size=len(filtered_df),
+        churn_rate=float(filtered_df["Attrition_Flag"].mean() * 100),
+        churned_customers=int(filtered_df["Attrition_Flag"].sum()),
+        best_model=insights.get("best_model", "Random Forest"),
+        top_drivers=top_drivers,
+        dashboard_pages=DASHBOARD_PAGES,
+    )
+    context_payload.update(behavior)
+    context_payload["power_bi_report_url"] = os.getenv(
+        "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
     )
 
-    page_options = ["All Dashboard Pages"] + [page_name for page_name, _ in dashboard_pages]
-    selected_page = st.selectbox("Assistant focus", page_options)
-    selected_page_context = next(
-        (
-            {"page": page_name, "description": description}
-            for page_name, description in dashboard_pages
-            if page_name == selected_page
-        ),
-        None,
-    )
-    active_context_payload = {
-        **context_payload,
-        "assistant_focus": selected_page_context or {
-            "page": "All Dashboard Pages",
-            "description": "Use the full dashboard context when answering.",
-        },
-    }
-
-    secrets = get_streamlit_secrets()
-    api_key = get_gemini_api_key(secrets)
-    model_name = get_gemini_model(secrets)
-    if api_key:
-        st.caption("Gemini API key detected. The assistant will use the built-in default model.")
-    else:
-        st.warning(
-            "Add `GEMINI_API_KEY` or `st.secrets['gemini']['api_key']` to enable live responses."
-        )
-
-    st.markdown("**Suggested questions**")
-    for index, example_query in enumerate(example_queries, start=1):
-        if st.button(example_query, key=f"example-query-{index}", use_container_width=True):
-            queue_example_question(example_query)
-
-    for message in st.session_state.assistant_messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-
-    question = st.session_state.pending_question or st.chat_input(
-        "Ask the churn assistant a question"
-    )
-    if not question:
-        return
-    st.session_state.pending_question = ""
-
-    st.session_state.assistant_messages.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.write(question)
-
-    with st.chat_message("assistant"):
-        if not api_key:
-            fallback_response = (
-                "The assistant UI is ready, but no Gemini API key is configured yet. "
-                "Add the Gemini API key and try again to generate live churn explanations."
-            )
-            st.write(fallback_response)
-            st.session_state.assistant_messages.append(
-                {"role": "assistant", "content": fallback_response}
-            )
-            return
-
-        with st.spinner("Generating insight..."):
-            try:
-                answer = generate_llm_response(
-                    question=question,
-                    chat_history=st.session_state.assistant_messages[:-1],
-                    context_payload=active_context_payload,
-                    api_key=api_key,
-                    model=model_name,
-                )
-            except Exception as exc:
-                answer = (
-                    "I couldn't generate a response right now. "
-                    f"Please verify the Gemini package and API key configuration. Details: {exc}"
-                )
-
-        st.write(answer)
-        st.session_state.assistant_messages.append({"role": "assistant", "content": answer})
-
-
-df = load_data()
-insights = load_insights()
-embed_url, report_url = get_power_bi_links()
-churned_customers = int(df["Attrition_Flag"].sum()) if "Attrition_Flag" in df.columns else 0
-top_drivers = insights.get("top_churn_drivers", [])
-context_payload = build_dashboard_context_payload(
-    dataset_size=len(df),
-    churn_rate=float(insights.get("churn_rate", 0)),
-    churned_customers=churned_customers,
-    best_model=insights.get("best_model", "Not available"),
-    top_drivers=top_drivers,
-    dashboard_pages=DASHBOARD_PAGES,
-)
-context_payload.update(build_behavioral_summary(df))
-example_queries = [
-    "Why are customers churning according to this dashboard?",
-    "Which customer behaviors are the strongest warning signs?",
-    "What actions should the business prioritize to reduce churn?",
-]
-
-initialize_chat_state()
-
-st.title("AI-Powered Customer Churn Analytics Dashboard")
-st.caption(
-    "Explore customer churn performance, embedded business intelligence, and AI-generated explanations in one interface."
-)
-
-summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
-summary_col1.metric("Total Customers", f"{len(df):,}")
-summary_col2.metric("Churned Customers", f"{churned_customers:,}")
-summary_col3.metric("Churn Rate", f"{float(insights.get('churn_rate', 0)):.2f}%")
-summary_col4.metric("Best Model", insights.get("best_model", "Not available"))
-
-overview_col, assistant_col = st.columns([1.2, 0.8], gap="large")
-
-with overview_col:
-    st.subheader("Dataset Summary")
-    st.write(
-        "The cleaned churn dataset is loaded into the app and connected to the feature-importance insights used by the assistant."
-    )
-    st.dataframe(df.head(), use_container_width=True)
-
-    st.subheader("Model Insights")
-    st.write("Top churn drivers extracted from the Random Forest model:")
-    for index, driver in enumerate(top_drivers, start=1):
-        st.markdown(f"{index}. `{driver}`")
-
-    st.subheader("Dashboard Context")
-    for page_name, description in DASHBOARD_PAGES:
-        st.markdown(f"**{page_name}**: {description}")
-
-with assistant_col:
-    render_assistant_panel(context_payload, example_queries, DASHBOARD_PAGES)
-
-st.subheader("Power BI Experience")
-if embed_url:
-    components.html(
-        f"""
-        <iframe
-            title="Customer Churn Power BI Dashboard"
-            width="100%"
-            height="720"
-            src="{embed_url}"
-            frameborder="0"
-            allowFullScreen="true">
-        </iframe>
-        """,
-        height=740,
-    )
-else:
-    st.info(
-        "Public embed code is not enabled for this report, so the dashboard cannot be rendered in an iframe yet."
-    )
     st.markdown(
-        f"Open the secured Power BI report here: [View report]({report_url})"
+        """
+        <style>
+        div[data-testid="stButton"][id*="floating-chat"] {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 9999;
+        }
+        div[data-testid="stButton"][id*="floating-chat"] button {
+            border-radius: 999px;
+            background: #f44346;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.1rem;
+            box-shadow: 0 10px 24px rgba(244, 67, 70, 0.28);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    st.caption(
-        "Once your admin enables embed code creation, add the publish-to-web or secure embed URL to enable in-app iframe rendering."
+
+    button_label = "Close AI Panel" if st.session_state.chat_open else "Ask AI"
+    if st.button(f"💬 {button_label}", key="floating-chat-toggle"):
+        st.session_state.chat_open = not st.session_state.chat_open
+
+    if not st.session_state.chat_open:
+        return
+
+    with st.container():
+        st.markdown('<div class="chat-panel">', unsafe_allow_html=True)
+        st.subheader("Ask AI")
+        st.caption("The assistant uses the filtered dashboard context plus the ML churn drivers.")
+
+        api_key = get_gemini_api_key()
+        model_name = get_gemini_model()
+        if not api_key:
+            st.warning("Add `GEMINI_API_KEY` to your `.env` file to enable the assistant.")
+        else:
+            st.caption(f"Gemini assistant ready with internal model `{model_name}`.")
+
+        example_queries = [
+            "Why are customers churning in the current filtered view?",
+            "Which segments in these charts look most at risk?",
+            "What actions can reduce churn for this filtered segment?",
+        ]
+        st.markdown("**Quick questions**")
+        example_columns = st.columns(len(example_queries))
+        for column, example_query in zip(example_columns, example_queries):
+            with column:
+                if st.button(example_query, key=f"assistant-example-{example_query}"):
+                    st.session_state.assistant_example_question = example_query
+        user_question = st.chat_input("Ask a question about the dashboard")
+        question = st.session_state.assistant_example_question or user_question
+
+        for message in st.session_state.assistant_messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+
+        if question:
+            st.session_state.assistant_example_question = ""
+            st.session_state.assistant_messages.append({"role": "user", "content": question})
+            with st.chat_message("user"):
+                st.write(question)
+
+            with st.chat_message("assistant"):
+                if not api_key:
+                    answer = (
+                        "The assistant is connected to the dashboard context, but the Gemini API key "
+                        "is missing from `.env`."
+                    )
+                else:
+                    try:
+                        answer = generate_llm_response(
+                            question=question,
+                            chat_history=st.session_state.assistant_messages[:-1],
+                            context_payload=context_payload,
+                            api_key=api_key,
+                            model=model_name,
+                        )
+                    except Exception as exc:
+                        answer = f"Gemini request failed: {exc}"
+                st.write(answer)
+                st.session_state.assistant_messages.append(
+                    {"role": "assistant", "content": answer}
+                )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def inject_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: #f3efeb;
+        }
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #ffffff 0%, #f7f2ee 100%);
+            border-right: 1px solid #eadfd6;
+        }
+        .title-card,
+        .metric-card,
+        .section-card,
+        .chart-card,
+        .chat-panel {
+            background: #fbfbfb;
+            border: 1px solid #eadfd6;
+            border-radius: 22px;
+            box-shadow: 0 10px 24px rgba(84, 68, 57, 0.10);
+            padding: 1rem 1.1rem;
+        }
+        .title-card {
+            min-height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .title-card-text {
+            text-align: center;
+            color: #8b8b8b;
+            font-size: 1.65rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            line-height: 1.22;
+        }
+        .metric-card {
+            min-height: 150px;
+        }
+        .metric-label {
+            color: #656565;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .metric-value {
+            background: #fffdfc;
+            border: 1px solid #efe2d7;
+            border-radius: 12px;
+            color: #f44346;
+            font-size: 2.2rem;
+            font-weight: 800;
+            text-align: center;
+            padding: 1rem 0.6rem;
+        }
+        .hero-note {
+            color: #5f5f5f;
+            font-size: 0.95rem;
+            margin: 0.8rem 0 1.3rem 0.15rem;
+        }
+        .model-card {
+            min-height: 180px;
+        }
+        .model-card-title {
+            color: #555555;
+            font-weight: 800;
+            font-size: 1.05rem;
+            margin-bottom: 0.75rem;
+        }
+        .model-card-content {
+            color: #666666;
+            line-height: 1.6;
+        }
+        .chart-card {
+            margin-bottom: 1rem;
+            padding: 0.35rem 0.5rem 0.2rem 0.5rem;
+        }
+        .chat-panel {
+            margin-top: 1.5rem;
+            margin-bottom: 5rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
+
+
+inject_styles()
+full_df = load_data()
+insights = load_insights()
+initialize_chat_state()
+filtered_df = apply_filters(full_df)
+embed_url, report_url = get_power_bi_links()
+
+if filtered_df.empty:
+    st.warning("No records match the current filters. Please widen the filter selections.")
+    st.stop()
+
+render_header(filtered_df, full_df, insights)
+render_dataset_summary(filtered_df)
+st.subheader("Model Insights")
+behavior_summary = render_model_insights(filtered_df, insights)
+figures = create_visualizations(filtered_df)
+render_charts(figures)
+
+st.subheader("Power BI Report Link")
+if embed_url:
+    st.markdown(f"[Open embedded Power BI report]({embed_url})")
+else:
+    st.markdown(f"[Open Power BI report]({report_url})")
+
+render_ai_assistant(filtered_df, insights, behavior_summary)
