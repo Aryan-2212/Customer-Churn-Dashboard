@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from analytics_context import build_behavioral_summary
 from llm_assistant import generate_llm_response, get_gemini_api_key, get_gemini_model
@@ -53,7 +54,7 @@ st.set_page_config(page_title="AI-Powered Customer Churn Dashboard", layout="wid
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
-    return pd.read_csv(DATA_PATH)
+    return pd.read_csv(DATA_PATH, low_memory=False)
 
 
 @st.cache_data
@@ -62,8 +63,16 @@ def load_insights() -> dict:
         return json.load(insights_file)
 
 
+def get_streamlit_secrets() -> dict:
+    try:
+        return dict(st.secrets)
+    except StreamlitSecretNotFoundError:
+        return {}
+
+
 def get_power_bi_links() -> tuple[str, str]:
-    power_bi_config = st.secrets.get("power_bi", {})
+    secrets = get_streamlit_secrets()
+    power_bi_config = secrets.get("power_bi", {})
     embed_url = power_bi_config.get("embed_url", "") or os.getenv("POWER_BI_EMBED_URL", "")
     report_url = power_bi_config.get("report_url", "") or os.getenv(
         "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
@@ -115,8 +124,9 @@ def render_assistant_panel(
         },
     }
 
-    api_key = get_gemini_api_key(st.secrets)
-    model_name = get_gemini_model(st.secrets)
+    secrets = get_streamlit_secrets()
+    api_key = get_gemini_api_key(secrets)
+    model_name = get_gemini_model(secrets)
     if api_key:
         st.caption("Gemini API key detected. The assistant will use the built-in default model.")
     else:
