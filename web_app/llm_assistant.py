@@ -62,6 +62,7 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
     segment = context_payload.get("segment_risk_snapshot", {})
     current_filters = context_payload.get("current_filters", {})
     snapshot = context_payload.get("dashboard_snapshot", {})
+    chart_summaries = snapshot.get("chart_summaries", {})
     question_lower = question.lower()
 
     income_counts = snapshot.get("income_category_counts", {})
@@ -104,6 +105,29 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
             f"In the current filtered view, `{top_education[0]}` has the highest customer count "
             f"with {top_education[1]:,} customers."
         )
+
+    if chart_summaries and any(
+        token in question_lower for token in ["scatter", "plot", "graph", "chart"]
+    ):
+        if any(token in question_lower for token in ["credit", "usage", "limit", "revolving"]):
+            chart_info = chart_summaries.get("credit_usage_vs_limit", {})
+            return (
+                f"That scatter plot is comparing credit limit on the x-axis with revolving balance on the y-axis. "
+                f"{chart_info.get('summary', '')} {chart_info.get('active_customer_pattern', '')} "
+                f"{chart_info.get('churned_customer_pattern', '')} {chart_info.get('business_takeaway', '')}"
+            ).strip()
+        if any(token in question_lower for token in ["transaction", "activity"]):
+            chart_info = chart_summaries.get("transaction_activity_vs_churn", {})
+            return (
+                f"That chart is meant to show how customer activity separates retained and churned behavior. "
+                f"{chart_info.get('summary', '')} {chart_info.get('business_takeaway', '')}"
+            ).strip()
+        if any(token in question_lower for token in ["inactivity", "utilization"]):
+            chart_info = chart_summaries.get("inactivity_vs_credit_utilization", {})
+            return (
+                f"That chart shows how utilization changes as inactivity increases. "
+                f"{chart_info.get('summary', '')} {chart_info.get('business_takeaway', '')}"
+            ).strip()
 
     top_drivers = insights.get("top_churn_drivers", [])
     drivers_text = ", ".join(top_drivers[:3]) if top_drivers else "transaction behavior and inactivity"
