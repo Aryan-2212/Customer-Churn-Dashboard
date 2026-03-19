@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from analytics_context import build_behavioral_summary
 from llm_assistant import generate_llm_response, get_openai_api_key, get_openai_model
 from prompt_template import build_dashboard_context_payload
 
@@ -177,6 +178,7 @@ context_payload = build_dashboard_context_payload(
     top_drivers=top_drivers,
     dashboard_pages=DASHBOARD_PAGES,
 )
+context_payload.update(build_behavioral_summary(df))
 example_queries = [
     "Why are customers churning according to this dashboard?",
     "Which customer behaviors are the strongest warning signs?",
