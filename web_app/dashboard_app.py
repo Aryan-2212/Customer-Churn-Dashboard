@@ -120,7 +120,7 @@ def get_power_bi_links() -> tuple[str, str]:
     return embed_url, report_url
 
 
-def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
+def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     st.sidebar.markdown('<div class="sidebar-title">Filters</div>', unsafe_allow_html=True)
 
     age_min = int(df["Customer_Age"].min())
@@ -170,8 +170,17 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     if selected_card != "All":
         filtered_df = filtered_df[filtered_df["Card_Category"] == selected_card]
 
+    filter_context = {
+        "age_range": {"min": selected_age[0], "max": selected_age[1]},
+        "inactive_months_range": {"min": selected_inactivity[0], "max": selected_inactivity[1]},
+        "gender": selected_gender,
+        "income_category": selected_income,
+        "card_category": selected_card,
+        "attrition_status": selected_attrition,
+    }
+
     st.sidebar.caption(f"Filtered customers: {len(filtered_df):,}")
-    return filtered_df
+    return filtered_df, filter_context
 
 
 def churn_label_series(df: pd.DataFrame) -> pd.Series:
@@ -670,7 +679,9 @@ def initialize_chat_state() -> None:
         st.session_state.assistant_manual_question = ""
 
 
-def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dict) -> None:
+def render_ai_assistant(
+    filtered_df: pd.DataFrame, insights: dict, behavior: dict, filter_context: dict
+) -> None:
     top_drivers = insights.get("top_churn_drivers", [])
     context_payload = build_dashboard_context_payload(
         dataset_size=len(filtered_df),
@@ -681,12 +692,13 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
         dashboard_pages=DASHBOARD_PAGES,
     )
     context_payload.update(behavior)
+    context_payload["current_filters"] = filter_context
     context_payload["power_bi_report_url"] = os.getenv(
         "POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL
     )
 
     st.markdown('<div id="ask-ai-anchor"></div>', unsafe_allow_html=True)
-    popover_label = "💬 Ask AI"
+    popover_label = "Ask AI"
     popover_context = (
         st.popover(popover_label, use_container_width=False)
         if hasattr(st, "popover")
@@ -723,14 +735,16 @@ def render_ai_assistant(filtered_df: pd.DataFrame, insights: dict, behavior: dic
             with column:
                 if st.button(example_query, key=f"assistant-example-{example_query}"):
                     st.session_state.assistant_example_question = example_query
-        st.text_input(
-            "Ask a question about the dashboard",
-            key="assistant_manual_question",
-            placeholder="Ask a question about the dashboard",
-        )
-        if st.button("Send", key="assistant-send"):
-            question = st.session_state.assistant_manual_question.strip()
-            st.session_state.assistant_manual_question = ""
+        with st.form("assistant-question-form", clear_on_submit=True):
+            manual_question = st.text_input(
+                "Ask a question about the dashboard",
+                key="assistant_manual_question",
+                placeholder="Ask a question about the dashboard",
+            )
+            submitted = st.form_submit_button("Send")
+
+        if submitted:
+            question = manual_question.strip()
         else:
             question = st.session_state.assistant_example_question
 
@@ -772,10 +786,12 @@ def inject_styles() -> None:
             color: #f3f6fb;
         }
         div[data-testid="stPopover"] {
-            position: fixed;
-            right: 24px;
-            bottom: 24px;
-            z-index: 1000;
+            position: fixed !important;
+            right: 24px !important;
+            bottom: 24px !important;
+            left: auto !important;
+            top: auto !important;
+            z-index: 1000 !important;
         }
         div[data-testid="stPopover"] > button {
             border-radius: 999px;
@@ -783,7 +799,8 @@ def inject_styles() -> None:
             color: white;
             border: 0;
             box-shadow: 0 12px 26px rgba(255, 85, 99, 0.30);
-            padding: 0.8rem 1rem;
+            padding: 0.65rem 0.95rem;
+            min-width: 110px;
         }
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #131924 0%, #0d1219 100%);
@@ -898,7 +915,7 @@ inject_styles()
 full_df = load_data()
 insights = load_insights()
 initialize_chat_state()
-filtered_df = apply_filters(full_df)
+filtered_df, filter_context = apply_filters(full_df)
 embed_url, report_url = get_power_bi_links()
 
 if filtered_df.empty:
@@ -918,4 +935,4 @@ if embed_url:
 else:
     st.markdown(f"[Open Power BI report]({report_url})")
 
-render_ai_assistant(filtered_df, insights, behavior_summary)
+render_ai_assistant(filtered_df, insights, behavior_summary, filter_context)
