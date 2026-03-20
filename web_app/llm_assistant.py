@@ -6,20 +6,18 @@ from dotenv import load_dotenv
 from prompt_template import build_system_prompt, build_user_prompt
 
 
-DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
 load_dotenv()
 
 
-def get_openai_api_key(secrets: Any) -> str:
-    openai_config = secrets.get("openai", {})
-    secret_key = openai_config.get("api_key", "")
-    return secret_key or os.getenv("OPENAI_API_KEY", "")
+def get_gemini_api_key(secrets: Any) -> str:
+    gemini_config = secrets.get("gemini", {})
+    secret_key = gemini_config.get("api_key", "")
+    return secret_key or os.getenv("GEMINI_API_KEY", "")
 
 
-def get_openai_model(secrets: Any) -> str:
-    openai_config = secrets.get("openai", {})
-    secret_model = openai_config.get("model", "")
-    return secret_model or os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+def get_gemini_model(secrets: Any) -> str:
+    return DEFAULT_GEMINI_MODEL
 
 
 def generate_llm_response(
@@ -31,18 +29,16 @@ def generate_llm_response(
     model: str,
 ) -> str:
     try:
-        from openai import OpenAI
+        import google.generativeai as genai
     except ImportError as exc:
         raise RuntimeError(
-            "The `openai` package is not installed. Install it before using the assistant."
+            "The `google-generativeai` package is not installed. Install it before using the assistant."
         ) from exc
 
-    client = OpenAI(api_key=api_key)
-    response = client.responses.create(
-        model=model,
-        input=[
-            {"role": "system", "content": build_system_prompt(context_payload)},
-            {"role": "user", "content": build_user_prompt(question, chat_history)},
-        ],
+    genai.configure(api_key=api_key)
+    assistant_prompt = (
+        f"{build_system_prompt(context_payload)}\n\n"
+        f"{build_user_prompt(question, chat_history)}"
     )
-    return (response.output_text or "").strip()
+    response = genai.GenerativeModel(model).generate_content(assistant_prompt)
+    return (response.text or "").strip()

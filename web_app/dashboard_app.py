@@ -7,7 +7,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from analytics_context import build_behavioral_summary
-from llm_assistant import generate_llm_response, get_openai_api_key, get_openai_model
+from llm_assistant import generate_llm_response, get_gemini_api_key, get_gemini_model
 from prompt_template import build_dashboard_context_payload
 
 
@@ -115,13 +115,13 @@ def render_assistant_panel(
         },
     }
 
-    api_key = get_openai_api_key(st.secrets)
-    model_name = get_openai_model(st.secrets)
+    api_key = get_gemini_api_key(st.secrets)
+    model_name = get_gemini_model(st.secrets)
     if api_key:
-        st.caption(f"OpenAI model configured: `{model_name}`")
+        st.caption("Gemini API key detected. The assistant will use the built-in default model.")
     else:
         st.warning(
-            "Add `OPENAI_API_KEY` or `st.secrets['openai']['api_key']` to enable live responses."
+            "Add `GEMINI_API_KEY` or `st.secrets['gemini']['api_key']` to enable live responses."
         )
 
     st.markdown("**Suggested questions**")
@@ -147,8 +147,8 @@ def render_assistant_panel(
     with st.chat_message("assistant"):
         if not api_key:
             fallback_response = (
-                "The assistant UI is ready, but no OpenAI API key is configured yet. "
-                "Add the key and try again to generate live churn explanations."
+                "The assistant UI is ready, but no Gemini API key is configured yet. "
+                "Add the Gemini API key and try again to generate live churn explanations."
             )
             st.write(fallback_response)
             st.session_state.assistant_messages.append(
@@ -168,7 +168,7 @@ def render_assistant_panel(
             except Exception as exc:
                 answer = (
                     "I couldn't generate a response right now. "
-                    f"Please verify the OpenAI package, API key, and model configuration. Details: {exc}"
+                    f"Please verify the Gemini package and API key configuration. Details: {exc}"
                 )
 
         st.write(answer)

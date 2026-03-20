@@ -44,7 +44,7 @@ Customer churn dataset
 - Displayed churn KPIs, top churn drivers, and dashboard context
 - Added a secured Power BI report link fallback when public embed is not available
 - Implemented an LLM assistant module with reusable prompt templates
-- Connected OpenAI response generation to the chatbot UI
+- Connected Gemini response generation to the chatbot UI
 - Added dashboard page focus selection for more targeted answers
 - Enriched assistant context with churn behavior summaries computed from the dataset
 - Added one-click example questions for faster user interaction
@@ -53,7 +53,7 @@ Customer churn dataset
 ## Key Files
 
 - `web_app/dashboard_app.py`: main Streamlit app
-- `web_app/llm_assistant.py`: OpenAI integration and response generation
+- `web_app/llm_assistant.py`: Gemini integration and response generation
 - `web_app/prompt_template.py`: system and user prompt construction
 - `web_app/analytics_context.py`: churn behavior summary builder
 - `churn_insights.json`: structured ML insight payload
@@ -72,8 +72,7 @@ Customer churn dataset
 2. Create or update the local `.env` file:
 
    ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   OPENAI_MODEL=gpt-4.1-mini
+   GEMINI_API_KEY=your_gemini_api_key_here
    POWER_BI_REPORT_URL=https://app.powerbi.com/groups/me/reports/142efc4a-bb5c-43b5-8d54-297b41ab74d6/dc6b1f534010170e5201?experience=power-bi
    POWER_BI_EMBED_URL=
    ```
