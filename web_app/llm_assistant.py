@@ -2,6 +2,8 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
+from streamlit.errors import StreamlitSecretNotFoundError
+import streamlit as st
 
 from prompt_template import build_system_prompt, build_user_prompt
 
@@ -10,12 +12,19 @@ DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 load_dotenv()
 
 
+def get_streamlit_secret(name: str, default: str = "") -> str:
+    try:
+        return str(st.secrets.get(name, default))
+    except StreamlitSecretNotFoundError:
+        return default
+
+
 def get_gemini_api_key() -> str:
-    return os.getenv("GEMINI_API_KEY", "")
+    return get_streamlit_secret("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY", "")
 
 
 def get_gemini_model() -> str:
-    return os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    return get_streamlit_secret("GEMINI_MODEL") or os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
 
 def is_gemini_available() -> bool:

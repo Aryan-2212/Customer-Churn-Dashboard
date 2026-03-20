@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from analytics_context import build_behavioral_summary
 from llm_assistant import (
@@ -115,8 +116,15 @@ def load_insights() -> dict:
 
 
 def get_power_bi_links() -> tuple[str, str]:
-    embed_url = os.getenv("POWER_BI_EMBED_URL", "")
-    report_url = os.getenv("POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL)
+    try:
+        embed_url = str(st.secrets.get("POWER_BI_EMBED_URL", ""))
+        report_url = str(st.secrets.get("POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL))
+    except StreamlitSecretNotFoundError:
+        embed_url = ""
+        report_url = DEFAULT_POWER_BI_REPORT_URL
+
+    embed_url = embed_url or os.getenv("POWER_BI_EMBED_URL", "")
+    report_url = report_url or os.getenv("POWER_BI_REPORT_URL", DEFAULT_POWER_BI_REPORT_URL)
     return embed_url, report_url
 
 
