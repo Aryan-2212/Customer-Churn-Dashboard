@@ -32,6 +32,7 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
     insights = context_payload.get("model_insights", {})
     patterns = context_payload.get("behavioral_patterns", {})
     segment = context_payload.get("segment_risk_snapshot", {})
+    current_filters = context_payload.get("current_filters", {})
 
     top_drivers = insights.get("top_churn_drivers", [])
     drivers_text = ", ".join(top_drivers[:3]) if top_drivers else "transaction behavior and inactivity"
@@ -45,9 +46,26 @@ def generate_fallback_response(question: str, context_payload: dict[str, Any]) -
     )
     risk_category = segment.get("highest_risk_card_category", "the currently filtered card mix")
     risk_rate = segment.get("highest_risk_card_churn_rate_percent", 0)
+    filter_parts = []
+    if current_filters:
+        filter_parts.append(
+            f"age {current_filters.get('age_range', {}).get('min', 'n/a')} to {current_filters.get('age_range', {}).get('max', 'n/a')}"
+        )
+        filter_parts.append(
+            f"inactive months {current_filters.get('inactive_months_range', {}).get('min', 'n/a')} to {current_filters.get('inactive_months_range', {}).get('max', 'n/a')}"
+        )
+        if current_filters.get("gender") and current_filters.get("gender") != "All":
+            filter_parts.append(f"gender {current_filters.get('gender')}")
+        if current_filters.get("income_category") and current_filters.get("income_category") != "All":
+            filter_parts.append(f"income {current_filters.get('income_category')}")
+        if current_filters.get("card_category") and current_filters.get("card_category") != "All":
+            filter_parts.append(f"card {current_filters.get('card_category')}")
+        if current_filters.get("attrition_status") and current_filters.get("attrition_status") != "All":
+            filter_parts.append(f"status {current_filters.get('attrition_status')}")
+    filters_text = ", ".join(filter_parts) if filter_parts else "the current dashboard filters"
 
     return (
-        f"Based on the filtered dashboard view, churn is {summary.get('churn_rate_percent', 0):.2f}% "
+        f"Based on the filtered dashboard view for {filters_text}, churn is {summary.get('churn_rate_percent', 0):.2f}% "
         f"across {summary.get('dataset_size', 0):,} customers. The strongest churn signals in this view "
         f"are {drivers_text}. Customer activity weakens noticeably, with average transaction count moving from "
         f"{transaction_drop}, while inactivity increases from {inactivity_rise}. The riskiest visible segment is "
