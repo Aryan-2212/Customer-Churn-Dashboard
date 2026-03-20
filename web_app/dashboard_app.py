@@ -780,7 +780,10 @@ def render_ai_assistant(
         model_name = get_gemini_model()
         gemini_available = is_gemini_available()
         if not api_key:
-            st.info("Add `GEMINI_API_KEY` to your `.env` file to enable Gemini responses.")
+            st.info(
+                "Add `GEMINI_API_KEY` in Streamlit **App Settings -> Secrets** or in your local `.env` "
+                "file to enable live Gemini responses."
+            )
         elif not gemini_available:
             st.info(
                 "Gemini is not installed locally, so the assistant will use a dashboard-based fallback explanation."
