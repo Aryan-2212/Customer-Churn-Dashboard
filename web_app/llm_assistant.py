@@ -27,6 +27,16 @@ def get_gemini_model() -> str:
     return get_streamlit_secret("GEMINI_MODEL") or os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 
 
+def get_gemini_debug_status() -> dict[str, bool]:
+    streamlit_secret = get_streamlit_secret("GEMINI_API_KEY")
+    env_var = os.getenv("GEMINI_API_KEY", "")
+    return {
+        "streamlit_secret_found": bool(streamlit_secret),
+        "environment_variable_found": bool(env_var),
+        "gemini_package_available": is_gemini_available(),
+    }
+
+
 def is_gemini_available() -> bool:
     try:
         import google.generativeai  # noqa: F401

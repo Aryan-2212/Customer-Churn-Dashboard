@@ -11,6 +11,7 @@ from streamlit.errors import StreamlitSecretNotFoundError
 from analytics_context import build_behavioral_summary
 from llm_assistant import (
     generate_fallback_response,
+    get_gemini_debug_status,
     generate_llm_response,
     get_gemini_api_key,
     get_gemini_model,
@@ -779,6 +780,7 @@ def render_ai_assistant(
         api_key = get_gemini_api_key()
         model_name = get_gemini_model()
         gemini_available = is_gemini_available()
+        gemini_debug_status = get_gemini_debug_status()
         if not api_key:
             st.info(
                 "Add `GEMINI_API_KEY` in Streamlit **App Settings -> Secrets** or in your local `.env` "
@@ -790,6 +792,23 @@ def render_ai_assistant(
             )
         else:
             st.caption(f"Gemini assistant ready. Primary model candidate: `{model_name}`.")
+
+        with st.expander("Gemini connection diagnostics", expanded=not api_key):
+            st.caption(
+                "This check only shows whether the key source is detected. It does not reveal the actual secret value."
+            )
+            st.write(
+                {
+                    "streamlit_secret_found": "Yes" if gemini_debug_status["streamlit_secret_found"] else "No",
+                    "environment_variable_found": "Yes"
+                    if gemini_debug_status["environment_variable_found"]
+                    else "No",
+                    "gemini_package_available": "Yes"
+                    if gemini_debug_status["gemini_package_available"]
+                    else "No",
+                    "selected_model": model_name,
+                }
+            )
 
         example_queries = [
             "Why are customers churning in the current filtered view?",
