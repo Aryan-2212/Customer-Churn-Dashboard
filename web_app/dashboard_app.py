@@ -19,7 +19,7 @@ from llm_assistant import (
 )
 from prompt_template import build_dashboard_context_payload
 
-st.write("Secrets:", st.secrets)
+#st.write("Secrets:", st.secrets)
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
 DATA_PATH = PROJECT_ROOT / "BankChurners_Cleaned.csv"
