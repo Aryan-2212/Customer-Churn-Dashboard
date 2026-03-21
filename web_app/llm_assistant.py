@@ -4,6 +4,8 @@ from typing import Any
 from dotenv import load_dotenv
 from streamlit.errors import StreamlitSecretNotFoundError
 import streamlit as st
+import google.generativeai as genai
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from prompt_template import build_system_prompt, build_user_prompt
 
