@@ -27,6 +27,25 @@ def is_gemini_available() -> bool:
         return False
 
 
+def polish_response_text(response_text: str) -> str:
+    cleaned = response_text.strip()
+    replacements = {
+        "The provided dashboard context": "From the dashboard",
+        "the provided dashboard context": "the dashboard",
+        "The current context": "The current view",
+        "the current context": "the current view",
+        "the dashboard context indicates": "the dashboard shows",
+        "The dashboard context indicates": "The dashboard shows",
+        "the current context does not contain": "this view does not show",
+        "The current context does not contain": "This view does not show",
+        "However, the dashboard indicates": "Still, the dashboard shows",
+        "However, the provided context": "Still,",
+    }
+    for old_text, new_text in replacements.items():
+        cleaned = cleaned.replace(old_text, new_text)
+    return cleaned
+
+
 def generate_fallback_response(question: str, context_payload: dict[str, Any]) -> str:
     summary = context_payload.get("dataset_summary", {})
     insights = context_payload.get("model_insights", {})
@@ -165,7 +184,7 @@ def generate_llm_response(
     for candidate_model in candidate_models:
         try:
             response = genai.GenerativeModel(candidate_model).generate_content(assistant_prompt)
-            return (response.text or "").strip()
+            return polish_response_text((response.text or "").strip())
         except Exception:
             continue
 
