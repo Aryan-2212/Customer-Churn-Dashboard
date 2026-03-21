@@ -15,10 +15,9 @@ load_dotenv()
 
 
 def get_streamlit_secret(name: str, default: str = "") -> str:
-    try:
-        return str(st.secrets.get(name, default))
-    except StreamlitSecretNotFoundError:
-        return default
+    if name in st.secrets:
+        return str(st.secrets[name])
+    return default
 
 
 def get_gemini_api_key() -> str:
